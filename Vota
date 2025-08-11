@@ -1,164 +1,427 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Votazione Skills Calcio</title>
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: url('campo.jpg') no-repeat center center fixed;
-    background-size: cover;
+  :root{
+    --bg-overlay: rgba(0,0,0,0.6);
+    --card-bg: rgba(255,255,255,0.06);
+    --green: #4caf50;
+  }
+  body{
+    margin:0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: url('campo.jpg') center/cover no-repeat fixed;
     color: #fff;
-    text-align: center;
+    -webkit-font-smoothing:antialiased;
   }
-  .login-container, .players-container {
-    background-color: rgba(0,0,0,0.7);
-    padding: 20px;
-    margin: 20px auto;
-    border-radius: 10px;
-    max-width: 800px;
-  }
-  .player-card {
-    background-color: rgba(255,255,255,0.1);
-    padding: 15px;
-    margin: 10px 0;
-    border-radius: 8px;
-  }
-  .bar-container {
-    width: 100%;
-    background-color: #333;
-    border-radius: 5px;
-    margin: 5px 0;
-  }
-  .bar {
-    height: 20px;
-    border-radius: 5px;
-  }
-  .bar.skills { background-color: green; }
+  .wrap{max-width:1100px;margin:20px auto;padding:12px;}
+  .panel{background:var(--bg-overlay);padding:14px;border-radius:10px;margin-bottom:14px;}
+  h1,h2{margin:8px 0 12px}
+  select,input,button{padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#fff}
+  button{cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .card{background:var(--card-bg);padding:12px;border-radius:10px;color:#fff;min-height:120px;position:relative}
+  .card h3{margin:0 0 8px;font-size:1.05rem}
+  .skill-row{margin:8px 0}
+  .bar-outer{background:#222;border-radius:8px;height:18px;overflow:hidden}
+  .bar-inner{height:18px;background:var(--green);text-align:right;padding-right:6px;line-height:18px;font-size:12px}
+  .small{font-size:0.9rem;color:#ddd}
+  .admin-panel{margin-top:8px}
+  .hidden{display:none}
+  .muted{opacity:0.8;color:#ddd}
+  @media (max-width:600px){body{background-position:center 20%}}
 </style>
 </head>
 <body>
+  <div class="wrap">
+    <div id="loginPanel" class="panel">
+      <h1>Accesso</h1>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <div>
+          <label class="small">Seleziona nome</label><br>
+          <select id="selectName"><option value="">-- scegli --</option></select>
+        </div>
+        <div>
+          <label class="small">Oppure Admin</label><br>
+          <input id="adminCode" placeholder="codice admin" />
+        </div>
+        <div style="align-self:end">
+          <button id="btnLogin">Entra</button>
+        </div>
+      </div>
+      <p class="small muted">Se entri come Admin usa il codice <strong>admin2025</strong></p>
+    </div>
 
-<div class="login-container" id="login-container">
-  <h2>Seleziona il tuo nome</h2>
-  <select id="playerSelect">
-    <option value="">-- Scegli --</option>
-  </select>
-  <button onclick="login()">Entra</button>
-</div>
+    <div id="mainPanel" class="panel hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div>
+          <h2>Votazioni - Sei: <span id="who"></span></h2>
+        </div>
+        <div id="adminControls" class="admin-panel hidden">
+          <label class="small">Aggiungi giocatore</label><br>
+          <input id="newPlayerName" placeholder="Nome nuovo giocatore" />
+          <button id="btnAddPlayer">Aggiungi</button>
+        </div>
+        <div>
+          <button id="btnLogout">Logout</button>
+        </div>
+      </div>
 
-<div class="players-container" id="players-container" style="display:none;">
-  <h2>Vota le Skills</h2>
-  <div id="players-list"></div>
-</div>
+      <div id="playersGrid" class="grid" style="margin-top:12px"></div>
+    </div>
+  </div>
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBkuiFqFj1EZKoByZpjWwVlK_lUIx91iwg",
-  authDomain: "skills-giocatori.firebaseapp.com",
-  projectId: "skills-giocatori",
-  storageBucket: "skills-giocatori.firebasestorage.app",
-  messagingSenderId: "392075208696",
-  appId: "1:392075208696:web:e2b010f9ae0af6272e980d",
-  measurementId: "G-ZZ6NZPEPMP"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+  <!-- Firebase compat (più semplice per questo esempio) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-const players = ["Alex","Abbate","Sasi","Gino","Nicola","Andrea","Giovanni","Enzo","Isidoro","Cerullo","Petterutti","Errico","Mazza"];
-const skills = ["attacco","difesa","velocita","resistenza","forza","dribbling","tiro","passaggio","senso_tattico"];
+  <script>
+  // ---------- CONFIG FIREBASE (tu l'hai già fornita) ----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyBkuiFqFj1EZKoByZpjWwVlK_lUIx91iwg",
+    authDomain: "skills-giocatori.firebaseapp.com",
+    projectId: "skills-giocatori",
+    storageBucket: "skills-giocatori.firebasestorage.app",
+    messagingSenderId: "392075208696",
+    appId: "1:392075208696:web:e2b010f9ae0af6272e980d",
+    measurementId: "G-ZZ6NZPEPMP"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
 
-let currentUser = "";
+  // ---------- DATI INIZIALI ----------
+  const INITIAL_PLAYERS = ["Alex","Abbate","Sasi","Gino","Nicola","Andrea","Giovanni","Enzo","Isidoro","Cerullo","Petterutti","Errico","Mazza"];
+  const SKILLS = [
+    { key: 'attacco', max: 5 },
+    { key: 'difesa', max: 5 },
+    { key: 'velocita', max: 5 },
+    { key: 'resistenza', max: 5 },
+    { key: 'forza', max: 5 },
+    { key: 'dribbling', max: 5 },
+    { key: 'tiro', max: 5 },
+    { key: 'passaggio', max: 5 },
+    { key: 'senso_tattico', max: 5 }
+  ];
+  const RENDIMENTO_KEY = 'rendimento'; // max 10, editable always
 
-window.onload = () => {
-  const select = document.getElementById('playerSelect');
-  players.forEach(p => {
-    let opt = document.createElement('option');
-    opt.value = p;
-    opt.textContent = p;
-    select.appendChild(opt);
-  });
-};
+  // ---------- STATO LOCALE ----------
+  let currentUser = null;
+  let isAdmin = false;
 
-function login() {
-  const selected = document.getElementById('playerSelect').value;
-  if(!selected) { alert("Seleziona il tuo nome!"); return; }
-  currentUser = selected;
-  document.getElementById('login-container').style.display = 'none';
-  document.getElementById('players-container').style.display = 'block';
-  loadPlayers();
-}
+  // ---------- UTILITY ----------
+  function $(id){ return document.getElementById(id); }
+  function sanitId(s){ return s.replace(/\s+/g,'_'); }
 
-function getRendimentoColor(val) {
-  if(val <= 2) return "red";
-  if(val <= 4) return "orange";
-  if(val <= 6) return "yellow";
-  if(val <= 8) return "green";
-  return "lightblue";
-}
+  // ---------- LOGIN UI ----------
+  const selectName = $('selectName');
+  const btnLogin = $('btnLogin');
+  const btnLogout = $('btnLogout');
+  const adminCodeInput = $('adminCode');
+  const adminControls = $('adminControls');
 
-function loadPlayers() {
-  players.forEach(name => {
-    const docRef = db.collection("giocatori").doc(name);
-    docRef.get().then(doc => {
-      if(!doc.exists) {
-        let data = {};
-        skills.forEach(s => data[s] = 0);
-        data.rendimento = 0;
-        docRef.set(data);
-      }
+  // populate dropdown with initial players (we'll sync with Firestore list too)
+  function populateNames(names){
+    selectName.innerHTML = '<option value=\"\">-- scegli --</option>';
+    names.forEach(n=>{
+      const opt = document.createElement('option');
+      opt.value = n; opt.textContent = n;
+      selectName.appendChild(opt);
     });
-  });
+    // Admin option
+    const optAdmin = document.createElement('option');
+    optAdmin.value = '__admin__'; optAdmin.textContent = 'Admin';
+    selectName.appendChild(optAdmin);
+  }
+  populateNames(INITIAL_PLAYERS);
 
-  db.collection("giocatori").onSnapshot(snapshot => {
-    const container = document.getElementById('players-list');
-    container.innerHTML = "";
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      const name = doc.id;
-      let div = document.createElement('div');
-      div.className = 'player-card';
-      let html = `<h3>${name}</h3>`;
-      skills.forEach(s => {
-        let val = data[s] || 0;
-        html += `<div>${s} (${val.toFixed(1)})</div>
-                 <div class="bar-container"><div class="bar skills" style="width:${(val/5)*100}%"></div></div>`;
-      });
-      let valR = data.rendimento || 0;
-      html += `<div>Rendimento (${valR.toFixed(1)})</div>
-               <div class="bar-container"><div class="bar" style="background-color:${getRendimentoColor(valR)};width:${(valR/10)*100}%"></div></div>`;
-      if(name !== currentUser) {
-        html += `<div>
-          <label>Vota skills:</label><br>`;
-        skills.forEach(s => {
-          html += `${s}: <input type="number" min="0" max="5" id="vote_${name}_${s}" value="0"><br>`;
+  // ---------- SEED PLAYERS IF EMPTY ----------
+  async function seedPlayersIfEmpty(){
+    const snap = await db.collection('players').limit(1).get();
+    if(snap.empty){
+      const batch = db.batch();
+      INITIAL_PLAYERS.forEach(name=>{
+        const docRef = db.collection('players').doc(name);
+        batch.set(docRef, { name: name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        // create empty votes documents for skills
+        SKILLS.forEach(skill => {
+          const voteDoc = db.collection('votes').doc(`${name}-${skill.key}`);
+          batch.set(voteDoc, { voters: [], votes: [] });
         });
-        html += `Rendimento: <input type="number" min="0" max="10" id="vote_${name}_rendimento" value="${valR}"><br>
-                 <button onclick="vote('${name}')">Invia Voto</button>
-                 </div>`;
-      }
-      div.innerHTML = html;
-      container.appendChild(div);
-    });
-  });
-}
+        // create rendimento doc map empty
+        const rendDoc = db.collection('rendimento').doc(name);
+        batch.set(rendDoc, { byUser: {} });
+      });
+      await batch.commit();
+      console.log('Seeded initial players');
+    }
+  }
 
-function vote(playerName) {
-  let updates = {};
-  skills.forEach(s => {
-    let v = parseFloat(document.getElementById(`vote_${playerName}_${s}`).value) || 0;
-    if(v<0) v=0; if(v>5) v=5;
-    updates[s] = firebase.firestore.FieldValue.increment(v);
+  // call seed once on load (non-destructive)
+  seedPlayersIfEmpty().catch(e=>console.warn('seed error', e));
+
+  // ---------- LOGIN / LOGOUT ----------
+  btnLogin.addEventListener('click', async () => {
+    const val = selectName.value;
+    const adminCode = adminCodeInput.value.trim();
+    if(!val){ alert('Seleziona un nome o Admin'); return; }
+    if(val === '__admin__'){
+      if(adminCode !== 'admin2025'){ alert('Codice admin errato'); return; }
+      currentUser = 'Admin';
+      isAdmin = true;
+    } else {
+      currentUser = val;
+      isAdmin = false;
+    }
+    localStorage.setItem('voterName', currentUser);
+    $('loginPanel').classList && $('loginPanel').classList.add('hidden');
+    $('mainPanel').classList.remove('hidden');
+    $('who').textContent = currentUser;
+    if(isAdmin) adminControls.classList.remove('hidden'); else adminControls.classList.add('hidden');
+    startApp();
   });
-  let vr = parseFloat(document.getElementById(`vote_${playerName}_rendimento`).value) || 0;
-  if(vr<0) vr=0; if(vr>10) vr=10;
-  updates.rendimento = firebase.firestore.FieldValue.increment(vr);
-  db.collection("giocatori").doc(playerName).update(updates);
-}
-</script>
+
+  btnLogout.addEventListener('click', () => {
+    localStorage.removeItem('voterName');
+    location.reload();
+  });
+
+  // restore if already logged
+  const saved = localStorage.getItem('voterName');
+  if(saved){
+    // if admin saved, admin must still enter code for security; but for simplicity restore session
+    currentUser = saved;
+    isAdmin = (saved === 'Admin');
+    $('loginPanel').style.display = 'none';
+    $('mainPanel').classList.remove('hidden');
+    $('who').textContent = currentUser;
+    if(isAdmin) adminControls.classList.remove('hidden');
+    startApp();
+  }
+
+  // ---------- ADMIN: add player ----------
+  $('btnAddPlayer').addEventListener('click', async ()=>{
+    const name = $('newPlayerName').value.trim();
+    if(!name){ alert('Inserisci un nome'); return; }
+    // create player, votes docs and rendimento doc
+    const batch = db.batch();
+    const docRef = db.collection('players').doc(name);
+    batch.set(docRef, { name: name, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    SKILLS.forEach(skill=>{
+      const voteDoc = db.collection('votes').doc(`${name}-${skill.key}`);
+      batch.set(voteDoc, { voters: [], votes: [] });
+    });
+    const rendDoc = db.collection('rendimento').doc(name);
+    batch.set(rendDoc, { byUser: {} });
+    try{
+      await batch.commit();
+      $('newPlayerName').value = '';
+      alert('Giocatore aggiunto');
+    }catch(e){ console.error(e); alert('Errore aggiunta') }
+  });
+
+  // ---------- APP START ----------
+  let playersUnsub = null;
+  function startApp(){
+    // listen to players collection for rendering cards (responsive to additions)
+    playersUnsub = db.collection('players').orderBy('name').onSnapshot(snapshot=>{
+      const playersList = [];
+      snapshot.forEach(d=> playersList.push(d.id));
+      renderPlayersGrid(playersList);
+      // update dropdown too (so new players appear for login later)
+      populateNames(playersList);
+    }, err=> console.error('players snapshot err', err));
+  }
+
+  // ---------- RENDER GRID ----------
+  // we will attach listeners for votes and rendimento for each displayed player
+  const skillListeners = {}; // map player-skill -> unsubscribe fn
+  const rendimentoListeners = {}; // player -> unsubscribe
+
+  function clearListeners(){
+    Object.values(skillListeners).forEach(fn=>fn && fn());
+    Object.values(rendimentoListeners).forEach(fn=>fn && fn());
+    skillListeners = {};
+    rendimentoListeners = {};
+  }
+
+  function renderPlayersGrid(playerNames){
+    const grid = $('playersGrid');
+    grid.innerHTML = '';
+    // for each player create a card. We'll set up listeners for votes and rendimento to update bars
+    playerNames.forEach(name=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      // header
+      const header = document.createElement('h3');
+      header.textContent = name;
+      card.appendChild(header);
+
+      // skills area
+      SKILLS.forEach(skill=>{
+        const row = document.createElement('div');
+        row.className = 'skill-row';
+        const label = document.createElement('div');
+        label.textContent = skill.key + ' ';
+        label.style.fontSize = '0.95rem';
+        row.appendChild(label);
+
+        const barOuter = document.createElement('div');
+        barOuter.className = 'bar-outer';
+        const barInner = document.createElement('div');
+        barInner.className = 'bar-inner';
+        barInner.id = `bar-${name}-${skill.key}`;
+        barInner.textContent = '0';
+        barInner.style.width = '0%';
+        barOuter.appendChild(barInner);
+        row.appendChild(barOuter);
+
+        // voting control: only if currentUser !== name and user hasn't voted yet
+        if(currentUser !== name){
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.min = 0; input.max = skill.max; input.step = 1; input.value = 0;
+          input.style.width = '100%';
+          input.id = `input-${name}-${skill.key}`;
+          input.addEventListener('change', (e)=> onSkillVote(name, skill.key, parseInt(e.target.value,10), input));
+          row.appendChild(document.createElement('br'));
+          row.appendChild(input);
+        } else {
+          const note = document.createElement('div');
+          note.className = 'small muted';
+          note.textContent = 'Non puoi votare le skill tue';
+          row.appendChild(note);
+        }
+
+        card.appendChild(row);
+
+        // attach realtime listener for this player-skill
+        const docRef = db.collection('votes').doc(`${name}-${skill.key}`);
+        const key = `${name}-${skill.key}`;
+        // unsubscribe previous if exists
+        if(skillListeners[key]) { skillListeners[key](); delete skillListeners[key]; }
+        skillListeners[key] = docRef.onSnapshot(docSnap=>{
+          if(!docSnap.exists()){ // create empty doc if needed
+            docRef.set({ voters: [], votes: [] }).catch(()=>{});
+            return;
+          }
+          const data = docSnap.data();
+          const votes = Array.isArray(data.votes) ? data.votes : [];
+          const avg = votes.length ? (votes.reduce((a,b)=>a+b,0)/votes.length) : 0;
+          const max = skill.max;
+          const percent = (avg / max) * 100;
+          const el = document.getElementById(`bar-${name}-${skill.key}`);
+          if(el){ el.style.width = percent + '%'; el.textContent = avg.toFixed(1); }
+
+          // disable input if currentUser has already voted
+          if(currentUser && currentUser !== name){
+            const voters = Array.isArray(data.voters) ? data.voters : [];
+            const inputEl = document.getElementById(`input-${name}-${skill.key}`);
+            if(inputEl){
+              if(voters.includes(currentUser)) inputEl.disabled = true;
+              else inputEl.disabled = false;
+            }
+          }
+        }, err=>console.error('skill onSnapshot err', err));
+      }); // end skills
+
+      // rendimento row (editable always)
+      const rowR = document.createElement('div');
+      rowR.className = 'skill-row';
+      const labelR = document.createElement('div'); labelR.textContent = 'Rendimento';
+      labelR.style.fontSize = '0.95rem';
+      rowR.appendChild(labelR);
+
+      const barOuterR = document.createElement('div'); barOuterR.className = 'bar-outer';
+      const barInnerR = document.createElement('div'); barInnerR.className = 'bar-inner'; barInnerR.id = `bar-${name}-rendimento`;
+      barInnerR.style.background = 'lightblue'; barInnerR.textContent = '0'; barInnerR.style.width = '0%';
+      barOuterR.appendChild(barInnerR);
+      rowR.appendChild(barOuterR);
+
+      // input for rendimento: always present
+      const inputR = document.createElement('input');
+      inputR.type = 'range'; inputR.min = 0; inputR.max = 10; inputR.step = 1; inputR.value = 0;
+      inputR.id = `input-${name}-rendimento`;
+      inputR.style.width = '100%';
+      inputR.addEventListener('change', ()=> onRendimentoChange(name, parseInt(inputR.value,10)));
+      rowR.appendChild(document.createElement('br'));
+      rowR.appendChild(inputR);
+
+      card.appendChild(rowR);
+
+      $('playersGrid').appendChild(card);
+
+      // attach rendimento listener
+      const rDocRef = db.collection('rendimento').doc(name);
+      if(rendimentoListeners[name]) { rendimentoListeners[name](); delete rendimentoListeners[name]; }
+      rendimentoListeners[name] = rDocRef.onSnapshot(docSnap=>{
+        if(!docSnap.exists()){
+          rDocRef.set({ byUser: {} }).catch(()=>{});
+          return;
+        }
+        const data = docSnap.data();
+        const map = data.byUser || {};
+        const vals = Object.values(map).map(v=>parseFloat(v)||0);
+        const avg = vals.length ? (vals.reduce((a,b)=>a+b,0) / vals.length) : 0;
+        const elR = document.getElementById(`bar-${name}-rendimento`);
+        if(elR){ 
+          elR.textContent = avg.toFixed(1); 
+          elR.style.width = (avg/10)*100 + '%'; 
+          // color scale
+          if(avg <= 2) elR.style.background = 'red';
+          else if(avg <=4) elR.style.background = 'orange';
+          else if(avg <=6) elR.style.background = 'yellow';
+          else if(avg <=8) elR.style.background = 'green';
+          else elR.style.background = 'deepskyblue';
+        }
+        // set input value to your own if present (helps UX)
+        const myVal = map[currentUser];
+        const inputElR = document.getElementById(`input-${name}-rendimento`);
+        if(inputElR){
+          inputElR.value = (typeof myVal !== 'undefined') ? myVal : Math.round(avg);
+        }
+      }, err=>console.error('rendimento onSnapshot err', err));
+    }); // end playerNames.forEach
+  }
+
+  // ---------- VOTE HANDLERS ----------
+  async function onSkillVote(player, skill, value, inputEl){
+    if(!currentUser){ alert('Devi prima loggarti'); return; }
+    if(player === currentUser){ alert('Non puoi votare le tue skill'); return; }
+    const docRef = db.collection('votes').doc(`${player}-${skill}`);
+    try{
+      const snap = await docRef.get();
+      if(snap.exists()){
+        const data = snap.data();
+        const voters = Array.isArray(data.voters) ? data.voters : [];
+        if(voters.includes(currentUser)){ alert('Hai già votato questa skill per questo giocatore'); inputEl.disabled=true; return; }
+        await docRef.update({
+          voters: firebase.firestore.FieldValue.arrayUnion(currentUser),
+          votes: firebase.firestore.FieldValue.arrayUnion(value)
+        });
+        inputEl.disabled = true;
+      } else {
+        await docRef.set({ voters: [currentUser], votes: [value] });
+        inputEl.disabled = true;
+      }
+    }catch(e){ console.error('save skill err', e); alert('Errore salvataggio voto') }
+  }
+
+  // rendimento: we store per-user value in a map, overwriting previous value (so user can update always)
+  async function onRendimentoChange(player, value){
+    if(!currentUser){ alert('Devi prima loggarti'); return; }
+    const rRef = db.collection('rendimento').doc(player);
+    // set nested map field byUser.currentUser = value
+    const fieldPath = `byUser.${currentUser}`;
+    const obj = {}; obj[fieldPath] = value;
+    try{
+      await rRef.set(obj, { merge: true });
+    }catch(e){ console.error('rendimento save err', e); alert('Errore salvataggio rendimento') }
+  }
+
+  </script>
 </body>
 </html>
+
